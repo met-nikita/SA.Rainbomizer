@@ -74,6 +74,20 @@ DyomRandomizer::Initialise ()
                                     std::pair ("AutoTranslateToEnglish",
                                                &m_Config.Translate)))
         return;
+    if (m_Config.Translate)
+        {
+            if (!ConfigManager::ReadConfig ("DYOMRandomizer",
+                                            std::pair ("TranslatorAPIOAuth",
+                                                       &m_Config.OAuth)))
+                return;
+
+            if (!ConfigManager::ReadConfig ("DYOMRandomizer",
+                                            std::pair ("TranslatorAPIFolderID",
+                                                       &m_Config.FolderID)))
+                return;
+        }
+
+    mIAM = "";
 
     if (!ConfigManager::ReadConfig ("MissionRandomizer"))
         {
@@ -142,6 +156,19 @@ MakeRequest (HANDLE session, const std::string &file)
 
 /*******************************************************/
 HANDLE
+MakeRequestPOST (HANDLE session, const std::string &url,
+                 const std::string &headers, const std::string &data)
+{
+    HANDLE request = HttpOpenRequest (session, "POST", url.c_str (), NULL, NULL,
+                                      NULL, INTERNET_FLAG_SECURE, 0);
+    HttpSendRequest (request, headers.c_str (), headers.length (),
+                     (char*)data.c_str (), data.length());
+
+    return request;
+}
+
+/*******************************************************/
+HANDLE
 OpenSession (HINTERNET internet)
 {
     return InternetConnect (internet, "dyom.gtagames.nl",
@@ -151,9 +178,9 @@ OpenSession (HINTERNET internet)
 
 /*******************************************************/
 HANDLE
-OpenSessionTranslator (HINTERNET internet)
+OpenSession (HINTERNET internet, const std::string &domain)
 {
-    return InternetConnect (internet, "translate.google.com",
+    return InternetConnect (internet, domain.c_str(),
                             INTERNET_DEFAULT_HTTPS_PORT, NULL, NULL,
                             INTERNET_SERVICE_HTTP, 0, 0);
 }
@@ -259,6 +286,27 @@ DyomRandomizer::ParseMission (HANDLE session, const std::string &url)
 bool
 DyomRandomizer::TranslateMission (HANDLE session)
 {
+    // get IAM token for further use
+    HINTERNET   handle = InternetOpen ("123robot", INTERNET_OPEN_TYPE_PRECONFIG,
+                                     NULL, NULL, 0);
+    HANDLE      session2 = OpenSession (handle, "iam.api.cloud.yandex.net");
+    std::string response = ReadStringFromRequest (
+        MakeRequestPOST (session2, "/iam/v1/tokens",
+                         "Content-Type: application/json",
+                         std::string ("{\"yandexPassportOauthToken\":\"")
+                             + m_Config.OAuth + "\"}"));
+    std::regex  e ("\"iamToken\":\\s*\"(.*)\"");
+    std::cmatch cm;
+    if (!std::regex_search (response.c_str (), cm, e))
+        return false;
+    mIAM = cm[1];
+    CloseHandle (handle);
+    CloseHandle (session2);
+    
+    //translator 100% won't get language of every string right, so to determine the language of the mission we will find the language that had most occurences
+    std::map<std::string, size_t> lang_histogram;
+    using pair_type = decltype(lang_histogram)::value_type;
+
     //v1.1 - (int)2 - 6 header fields - doesn't have objective text
     //v2.0 v2.1 - (int)3 - 6 header fields - 0x4A7 - objective texts
     //v3.0 v4.0 v4.1 (int)4 - 6 header fields - 0xCCF - objective texts
@@ -301,9 +349,14 @@ DyomRandomizer::TranslateMission (HANDLE session)
         }
     std::size_t cut_pos = i_pos;
     //translate the mission name and write it to the resulting array
-    std::string translation = TranslateText (session, text);
+    std::string* result = TranslateText (session, text);
+    std::string  translation = result[0];
+    std::string  lang        = result[1];
+    ++lang_histogram[lang];
     memcpy (output + o_pos, translation.data (), translation.size ());
     o_pos += translation.size ();
+    //remember where to insert language code later
+    std::size_t lang_pos = o_pos;
     //write author name as-is
     i_pos++;
     while (input[i_pos] != 0x00)
@@ -324,7 +377,10 @@ DyomRandomizer::TranslateMission (HANDLE session)
                 {
                     if (text.length () > 1)
                         {
-                            translation = TranslateText (session, text);
+                            result = TranslateText (session, text);
+                            translation = result[0];
+                            std::string lang = result[1];
+                            ++lang_histogram[lang];
                         }
                     else
                         {
@@ -377,7 +433,10 @@ DyomRandomizer::TranslateMission (HANDLE session)
                         {
                             if (text.length () > 1)
                                 {
-                                    translation = TranslateText (session, text);
+                                    result      = TranslateText (session, text);
+                                    translation = result[0];
+                                    std::string lang = result[1];
+                                    ++lang_histogram[lang];
                                 }
                             else
                                 {
@@ -394,6 +453,19 @@ DyomRandomizer::TranslateMission (HANDLE session)
                         break;
                 }
         }
+    if (lang_histogram.size() < 1)
+        lang = " (unk)";
+    else
+        {
+            auto pr = std::max_element (std::begin (lang_histogram),
+                                     std::end (lang_histogram),
+                                        [] (const pair_type &p1,
+                                            const pair_type &p2) {
+                                            return p1.second < p2.second;
+                                        });
+            lang    = " (" + pr->first + ")";
+    }
+
     //write the rest of the file to the resulting array
     memcpy (output + o_pos, input + i_pos, read - i_pos);
     //rename original file
@@ -402,29 +474,35 @@ DyomRandomizer::TranslateMission (HANDLE session)
                  (CFileMgr::ms_dirName + "\\DYOM9_orig.dat"s).c_str ());
     //finally write the file with translated mission
     FILE *file2 = fopen ((CFileMgr::ms_dirName + "\\DYOM9.dat"s).c_str (), "wb");
-    fwrite (output, 1, o_pos + read - i_pos, file2);
+    fwrite (output, 1, lang_pos, file2);
+    fwrite (lang.data(), 1, lang.size(), file2);
+    fwrite (output+lang_pos, 1, o_pos + read - i_pos - lang_pos, file2);
     fclose (file2);
     FILE *file3
         = fopen ((CFileMgr::ms_dirName + "\\DYOM8.dat"s).c_str (), "wb");
-    fwrite (output, 1, o_pos + read - i_pos, file3);
+    fwrite (output, 1, lang_pos, file3);
+    fwrite (lang.data (), 1, lang.size (), file3);
+    fwrite (output + lang_pos, 1, o_pos + read - i_pos - lang_pos, file3);
     fclose (file3);
     return true;
 }
 
 /*******************************************************/
-std::string
+std::string *
 DyomRandomizer::TranslateText (HANDLE session, const std::string &text)
 {
+    std::string *result = new std::string[2] {text, "unk"};
     std::string response = ReadStringFromRequest (
-        MakeRequest (session, "m?sl=auto&tl=en&q=" + text));
-    std::size_t pos = response.find ("\"result-container\"");
-    if (pos == response.npos)
-        return text;
-    std::size_t pos2 = GetNthOccurrenceOfString (response, "</div>", 7);
-    std::string translation = response.substr (pos + 19, pos2 - pos - 19);
-    //fix quotation marks
-    translation = std::regex_replace (translation,
-                                      std::regex ("&#39;"), "'");
+        MakeRequestPOST (session, "/translate/v2/translate",
+        std::string ("Content-Type: application/json\r\nAuthorization: Bearer ")
+            + mIAM,
+        std::string ("{\"folderId\": \"")+m_Config.FolderID+"\",\"texts\": [\""+text+"\"],\"targetLanguageCode\": \"en\"}"));
+    std::regex  e ("\"text\":\\s*\"(.*)\",\\s*\"detectedLanguageCode\":\\s*\"(.*)\"");
+    std::cmatch cm;
+    if (!std::regex_search (response.c_str (), cm, e))
+        return result;
+    std::string translation = cm[1];
+    std::string lang = cm[2];
     //translator tends to break tags with spaces, attempt to fix
     translation = std::regex_replace(translation,std::regex("(~)\\s*([a-zA-Z])\\s*(~)"),"$1$2$3");
     //trim everything above 99 symbols (crashes overwise)
@@ -433,7 +511,7 @@ DyomRandomizer::TranslateText (HANDLE session, const std::string &text)
             translation = translation.substr (0, 99);
     }
     // remove remaining broken tags (crashes overwise)
-    pos = 0;
+    std:size_t pos = 0;
     while (true)
         {
             std::size_t tild = translation.find ("~", pos);
@@ -450,7 +528,9 @@ DyomRandomizer::TranslateText (HANDLE session, const std::string &text)
             else
                 break;
         }
-    return translation;
+    result[0] = translation;
+    result[1] = lang;
+    return result;
 }
 
 /*******************************************************/
@@ -490,7 +570,7 @@ DyomRandomizer::DownloadRandomMission ()
                                         INTERNET_OPEN_TYPE_PRECONFIG, NULL,
                                         NULL, 0);
 
-                    HANDLE session2 = OpenSessionTranslator (handle2);
+                    HANDLE session2 = OpenSession (handle2, "translate.api.cloud.yandex.net");
                     TranslateMission (session2);
                     CloseHandle (session2);
                     CloseHandle (handle2);

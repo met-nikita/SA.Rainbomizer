@@ -13,7 +13,7 @@ class DyomRandomizer
 
     bool        ParseMission (HANDLE session, const std::string &url);
     bool        TranslateMission (HANDLE session);
-    std::string TranslateText (HANDLE session, const std::string &text);
+    std::string* TranslateText (HANDLE session, const std::string &text);
     std::string GetRandomEntryFromPage (HANDLE session, std::string page);
     int  GetTotalNumberOfDYOMMissionPages (HANDLE session, std::string list);
     void DownloadRandomMission ();
@@ -23,7 +23,11 @@ public:
     {
         bool EnglishOnly;
         bool Translate;
+        std::string OAuth;
+        std::string FolderID;
     } m_Config;
+
+    std::string mIAM;
 
     CRunningScript *mDyomScript = nullptr;
 
