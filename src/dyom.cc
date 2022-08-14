@@ -497,12 +497,16 @@ DyomRandomizer::TranslateText (HANDLE session, const std::string &text)
         std::string ("Content-Type: application/json\r\nAuthorization: Bearer ")
             + mIAM,
         std::string ("{\"folderId\": \"")+m_Config.FolderID+"\",\"texts\": [\""+text+"\"],\"targetLanguageCode\": \"en\"}"));
-    std::regex  e ("\"text\":\\s*\"(.*)\",\\s*\"detectedLanguageCode\":\\s*\"(.*)\"");
+    std::regex  rtext ("\"text\":\\s*\"(.*)\"");
     std::cmatch cm;
-    if (!std::regex_search (response.c_str (), cm, e))
+    if (!std::regex_search (response.c_str (), cm, rtext))
         return result;
     std::string translation = cm[1];
-    std::string lang = cm[2];
+    std::regex  rlang (
+        "\"detectedLanguageCode\":\\s*\"(.*)\"");
+    std::string lang = "unk";
+    if (std::regex_search (response.c_str (), cm, rlang))
+        lang = cm[1];
     //translator tends to break tags with spaces, attempt to fix
     translation = std::regex_replace(translation,std::regex("(~)\\s*([a-zA-Z])\\s*(~)"),"$1$2$3");
     //trim everything above 99 symbols (crashes overwise)
