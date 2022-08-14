@@ -23,11 +23,8 @@ public:
     {
         bool EnglishOnly;
         bool Translate;
-        std::string OAuth;
-        std::string FolderID;
+        std::string APIKey;
     } m_Config;
-
-    std::string mIAM;
 
     CRunningScript *mDyomScript = nullptr;
 

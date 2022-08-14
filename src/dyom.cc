@@ -77,17 +77,10 @@ DyomRandomizer::Initialise ()
     if (m_Config.Translate)
         {
             if (!ConfigManager::ReadConfig ("DYOMRandomizer",
-                                            std::pair ("TranslatorAPIOAuth",
-                                                       &m_Config.OAuth)))
-                return;
-
-            if (!ConfigManager::ReadConfig ("DYOMRandomizer",
-                                            std::pair ("TranslatorAPIFolderID",
-                                                       &m_Config.FolderID)))
+                                            std::pair ("TranslatorAPIKey",
+                                                       &m_Config.APIKey)))
                 return;
         }
-
-    mIAM = "";
 
     if (!ConfigManager::ReadConfig ("MissionRandomizer"))
         {
@@ -286,23 +279,6 @@ DyomRandomizer::ParseMission (HANDLE session, const std::string &url)
 bool
 DyomRandomizer::TranslateMission (HANDLE session)
 {
-    // get IAM token for further use
-    HINTERNET   handle = InternetOpen ("123robot", INTERNET_OPEN_TYPE_PRECONFIG,
-                                     NULL, NULL, 0);
-    HANDLE      session2 = OpenSession (handle, "iam.api.cloud.yandex.net");
-    std::string response = ReadStringFromRequest (
-        MakeRequestPOST (session2, "/iam/v1/tokens",
-                         "Content-Type: application/json",
-                         std::string ("{\"yandexPassportOauthToken\":\"")
-                             + m_Config.OAuth + "\"}"));
-    std::regex  e ("\"iamToken\":\\s*\"(.*)\"");
-    std::cmatch cm;
-    if (!std::regex_search (response.c_str (), cm, e))
-        return false;
-    mIAM = cm[1];
-    CloseHandle (handle);
-    CloseHandle (session2);
-    
     //translator 100% won't get language of every string right, so to determine the language of the mission we will find the language that had most occurences
     std::map<std::string, size_t> lang_histogram;
     using pair_type = decltype(lang_histogram)::value_type;
@@ -493,16 +469,18 @@ DyomRandomizer::TranslateText (HANDLE session, const std::string &text)
 {
     std::string *result = new std::string[2] {text, "unk"};
     std::string response = ReadStringFromRequest (
-        MakeRequestPOST (session, "/translate/v2/translate",
-        std::string ("Content-Type: application/json\r\nAuthorization: Bearer ")
-            + mIAM,
-        std::string ("{\"folderId\": \"")+m_Config.FolderID+"\",\"texts\": [\""+text+"\"],\"targetLanguageCode\": \"en\"}"));
-    std::regex  e ("\"text\":\\s*\"(.*)\",\\s*\"detectedLanguageCode\":\\s*\"(.*)\"");
+        MakeRequestPOST (session, "/language/translate/v2",
+        std::string ("Content-Type: application/json"),
+        std::string ("{\"key\": \"")+m_Config.APIKey+"\",\"q\": [\""+text+"\"],\"target\": \"en\"}"));
+    std::regex  rtext ("\"translatedText\":\\s*\"(.*)\"");
     std::cmatch cm;
-    if (!std::regex_search (response.c_str (), cm, e))
+    if (!std::regex_search (response.c_str (), cm, rtext))
         return result;
     std::string translation = cm[1];
-    std::string lang = cm[2];
+    std::regex  rlang ("\"detectedSourceLanguage\":\\s*\"(.*)\"");
+    std::string lang = "unk";
+    if (std::regex_search (response.c_str (), cm, rlang))
+        lang = cm[1];
     //translator tends to break tags with spaces, attempt to fix
     translation = std::regex_replace(translation,std::regex("(~)\\s*([a-zA-Z])\\s*(~)"),"$1$2$3");
     //trim everything above 99 symbols (crashes overwise)
@@ -570,7 +548,7 @@ DyomRandomizer::DownloadRandomMission ()
                                         INTERNET_OPEN_TYPE_PRECONFIG, NULL,
                                         NULL, 0);
 
-                    HANDLE session2 = OpenSession (handle2, "translate.api.cloud.yandex.net");
+                    HANDLE session2 = OpenSession (handle2, "translation.googleapis.com");
                     TranslateMission (session2);
                     CloseHandle (session2);
                     CloseHandle (handle2);
