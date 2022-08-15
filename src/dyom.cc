@@ -472,12 +472,12 @@ DyomRandomizer::TranslateText (HANDLE session, const std::string &text)
         MakeRequestPOST (session, "/language/translate/v2",
         std::string ("Content-Type: application/json"),
         std::string ("{\"key\": \"")+m_Config.APIKey+"\",\"q\": [\""+text+"\"],\"target\": \"en\"}"));
-    std::regex  rtext ("\"translatedText\":\\s*\"(.*)\"");
+    std::regex  rtext ("\"translatedText\":\\s*\"(.*?)\"");
     std::cmatch cm;
     if (!std::regex_search (response.c_str (), cm, rtext))
         return result;
     std::string translation = cm[1];
-    std::regex  rlang ("\"detectedSourceLanguage\":\\s*\"(.*)\"");
+    std::regex  rlang ("\"detectedSourceLanguage\":\\s*\"(.*?)\"");
     std::string lang = "unk";
     if (std::regex_search (response.c_str (), cm, rlang))
         lang = cm[1];
