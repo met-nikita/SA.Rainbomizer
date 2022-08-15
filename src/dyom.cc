@@ -301,6 +301,7 @@ DyomRandomizer::TranslateMission (HANDLE session)
     memcpy (output, input, 4);
     INT8       version;
     std::size_t offset;
+    UINT8       max_objectives;
     memcpy (&version, input, 1);
     if (version < 0)
         version *= -1;
@@ -308,12 +309,21 @@ DyomRandomizer::TranslateMission (HANDLE session)
         return false;
     switch (version)
         {
-        case 3: offset = 0x4A7; break;
-        case 4: offset = 0xCCF; break;
+        case 3:
+            offset         = 0x4A7;
+            max_objectives = 20;
+            break;
+        case 4:
+            offset         = 0xCCF;
+            max_objectives = 50;
+            break;
         case 5:
         case 6:
-        default: offset = 0x194F; break;
-    }
+        default:
+            offset         = 0x194F;
+            max_objectives = 100;
+            break;
+        }
     std::size_t o_pos = 4;
     //get mission name string
     std::string text = "";
@@ -425,7 +435,7 @@ DyomRandomizer::TranslateMission (HANDLE session)
                             counter++;
                         }
                     i_pos++;
-                    if (counter >= 100)
+                    if (counter >= max_objectives)
                         break;
                 }
         }
