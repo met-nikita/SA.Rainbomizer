@@ -295,7 +295,7 @@ DyomRandomizer::TranslateMission (HANDLE session)
                          "Content-Type: application/json",
                          std::string ("{\"yandexPassportOauthToken\":\"")
                              + m_Config.OAuth + "\"}"));
-    std::regex  e ("\"iamToken\":\\s*\"(.*)\"");
+    std::regex  e ("\"iamToken\":\\s*\"(.*?)\"");
     std::cmatch cm;
     if (!std::regex_search (response.c_str (), cm, e))
         return false;
@@ -497,13 +497,13 @@ DyomRandomizer::TranslateText (HANDLE session, const std::string &text)
         std::string ("Content-Type: application/json\r\nAuthorization: Bearer ")
             + mIAM,
         std::string ("{\"folderId\": \"")+m_Config.FolderID+"\",\"texts\": [\""+text+"\"],\"targetLanguageCode\": \"en\"}"));
-    std::regex  rtext ("\"text\":\\s*\"(.*)\"");
+    std::regex  rtext ("\"text\":\\s*\"(.*?)\"");
     std::cmatch cm;
     if (!std::regex_search (response.c_str (), cm, rtext))
         return result;
     std::string translation = cm[1];
     std::regex  rlang (
-        "\"detectedLanguageCode\":\\s*\"(.*)\"");
+        "\"detectedLanguageCode\":\\s*\"(.*?)\"");
     std::string lang = "unk";
     if (std::regex_search (response.c_str (), cm, rlang))
         lang = cm[1];
