@@ -24,8 +24,8 @@ class DyomTranslator
     void ProcessDidTranslate (std::string translated);
     
 public:
-    DyomTranslator () { internet.Open ("translate.google.com"); }
-    ~DyomTranslator () { internet.Close (); }
+    DyomTranslator ();
+    ~DyomTranslator ();
 
     void FixupGxtTokens (std::string &text);
     void DecodeSpecialChars (std::string &text);
@@ -42,4 +42,28 @@ public:
     {
         return didTranslate;
     }
+
+    enum TranslationMethod
+    {
+        TM_DEFAULT,
+        TM_GOOGLECLOUD,
+        TM_YANDEXCLOUD,
+        TM_MAX
+    };
+
+    static inline struct Config
+    {
+        std::string TranslationChain;
+        int TranslationMethod;
+        std::string GoogleAPIKey;
+        std::string YandexOAuth;
+        std::string YandexFolderID;
+    } m_Config;
+
+    std::vector<std::string> mTranslationChain;
+    std::regex               mResultRegex;
+    bool                     mPost;
+    std::string              mURLTemplate;
+    std::string              mHeaderTemplate;
+    std::string              mRequestTemplate;
 };

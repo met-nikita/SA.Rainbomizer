@@ -338,6 +338,22 @@ RandomizeChaosPoints = false
 # Picks missions only from those designated as English by the DYOM website.
 UseEnglishOnlyFilter = false
 
+AutoTranslateToEnglish = true
+RandomSpawn = true
+
+# Defines what backend is used for translating, values other than 0 require additional setup below (0 - Default; 1 - Google Cloud API; 2 - Yandex Cloud API)
+TranslationMethod = 0
+
+# Languages in translation chain separated by a semicolon, e.g. "pl;el;zh-CN;en" means Polish->Greek->Simplified Chinese->English, see https://cloud.google.com/translate/docs/languages for TranslationMethod 0 or 1, https://cloud.yandex.com/en/docs/translate/concepts/supported-languages for TranslationMethod 2
+TranslationChain = "en"
+
+# Google Cloud (TranslationMethod 1) specific settings
+GoogleAPIKey = "read https://cloud.google.com/docs/authentication/api-keys"
+
+# Yandex Cloud (TranslationMethod 2) specific settings
+YandexOAuth = "Your Yandex Cloud OAuth token. Read here https://cloud.yandex.com/en-ru/docs/iam/concepts/authorization/oauth-token"
+YandexFolderID = "ID of any active folder from your Yandex Cloud dashboard https://console.cloud.yandex.com/cloud"
+
 #######################################################
 [CheatRandomizer]
 
