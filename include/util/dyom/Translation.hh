@@ -18,7 +18,7 @@ class DyomTranslator
     InternetUtils              internet;
     std::string                translationQueue;
     int                        queueCounter = 0;
-    bool                       didTranslate = false;
+    std::atomic_bool                     didTranslate = false;
     std::vector<std::string *> translationOut;
 
     void ProcessDidTranslate (std::string translated);
@@ -31,6 +31,7 @@ public:
     void DecodeSpecialChars (std::string &text);
 
     std::string TranslateText (const std::string &text);
+    void TranslateAsync (std::string &text);
     void        TranslateDyomFile (DYOM::DYOMFileStructure &file);
 
     // Queue based translation

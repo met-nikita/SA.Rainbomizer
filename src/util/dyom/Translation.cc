@@ -7,6 +7,7 @@
 #include <sstream>
 #include <iomanip>
 #include <config.hh>
+#include <thread>
 
 static inline void
 ltrim (std::string &s)
@@ -149,20 +150,44 @@ DyomTranslator::ProcessDidTranslate (std::string translated)
 
 /*******************************************************/
 void
+DyomTranslator::TranslateAsync (std::string &text)
+{
+    std::string orig = text;
+    text = TranslateText (text);
+    text = text.substr (0, 99);
+    FixupGxtTokens (text);
+    trim (text);
+    if (orig != text)
+        didTranslate = true;
+}
+
+/*******************************************************/
+void
 DyomTranslator::TranslateDyomFile (DYOM::DYOMFileStructure &file)
 {
     using namespace std::chrono;
     auto start = high_resolution_clock::now ();
 
+    std::vector<std::thread> threads;
+
     for (int i = 0; i < 3; i++)
         if (file.g_HEADERSTRINGS[i].size () > 1)
-            EnqueueTranslation (file.g_HEADERSTRINGS[i]);
+            threads.push_back (
+                std::thread (&DyomTranslator::TranslateAsync, this, std::ref(file.g_HEADERSTRINGS[i])));
+            //EnqueueTranslation (file.g_HEADERSTRINGS[i]);
 
     for (int i = 0; i < 100; i++)
         if (file.g_TEXTOBJECTIVES[i].size () > 1)
-            EnqueueTranslation (file.g_TEXTOBJECTIVES[i]);
+            threads.push_back (std::thread (&DyomTranslator::TranslateAsync,
+                                            this,
+                                            std::ref(file.g_TEXTOBJECTIVES[i])));
+            //EnqueueTranslation (file.g_TEXTOBJECTIVES[i]);
 
-    DoTranslate ();
+    for (auto &th : threads)
+        {
+            th.join ();
+        }
+    //DoTranslate ();
 
     auto stop     = high_resolution_clock::now ();
     auto duration = duration_cast<microseconds> (stop - start);
